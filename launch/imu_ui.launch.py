@@ -19,6 +19,15 @@ def generate_launch_description():
         parameters=[params_file]
     )
 
+    imu_ui_node = Node(
+        package='imu_pkg',
+        executable='imu_ui',
+        name='imu_ui_node',
+        output='screen',
+        parameters=[params_file]
+    )
+
     return LaunchDescription([
-        ebimu_node
+        ebimu_node,
+        imu_ui_node
     ])
