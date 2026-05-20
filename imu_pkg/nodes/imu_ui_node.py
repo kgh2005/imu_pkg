@@ -63,7 +63,7 @@ class ImuUiNode(Node):
         )
 
     def _declare_parameters(self):
-        self.input_topic = self.declare_parameter('input_topic', '/imu/data_raw').get_parameter_value().string_value
+        self.input_topic = self.declare_parameter('input_topic', '/imu/data').get_parameter_value().string_value
         self.output_topic = self.declare_parameter('output_topic', '/imu/data_zeroed').get_parameter_value().string_value
         self.frame_id = self.declare_parameter('frame_id', 'imu_link').get_parameter_value().string_value
 

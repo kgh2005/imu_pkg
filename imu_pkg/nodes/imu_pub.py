@@ -55,16 +55,6 @@ class EbimuPublisher(Node):
         # =========================
         self._connect_ebimu()
 
-        # =========================
-        # Timer
-        # =========================
-        timer_period = 1.0 / float(self.publish_rate_hz)
-
-        self.timer = self.create_timer(
-            timer_period,
-            self.timer_callback
-        )
-
         self._print_startup_info()
 
     def _declare_parameters(self):
@@ -73,12 +63,9 @@ class EbimuPublisher(Node):
         self.baud = self.declare_parameter('baud', 115200).get_parameter_value().integer_value
 
         # Topic / frame
-        self.topic_name = self.declare_parameter('topic_name', '/imu/data_raw').get_parameter_value().string_value
+        self.topic_name = self.declare_parameter('topic_name', '/imu/data').get_parameter_value().string_value
         self.gravity_topic_name = self.declare_parameter('gravity_topic_name', '/imu/gravity').get_parameter_value().string_value
-        self.frame_id = self.declare_parameter('frame_id','imu_link').get_parameter_value().string_value
-
-        # Publish rate
-        self.publish_rate_hz = self.declare_parameter('publish_rate_hz', 100).get_parameter_value().integer_value
+        self.frame_id = self.declare_parameter('frame_id', 'imu_link').get_parameter_value().string_value
 
         # Unit conversion
         self.accel_scale = self.declare_parameter('accel_scale', 9.80665).get_parameter_value().double_value
@@ -86,19 +73,16 @@ class EbimuPublisher(Node):
         self.invert_accel_sign = self.declare_parameter('invert_accel_sign', True).get_parameter_value().bool_value
 
         # Orientation
-        self.zero_orientation_on_start = self.declare_parameter('zero_orientation_on_start', True).get_parameter_value().bool_value
+        self.zero_orientation_on_start = self.declare_parameter(
+            'zero_orientation_on_start',
+            True
+        ).get_parameter_value().bool_value
 
         # QoS
         self.qos_depth = self.declare_parameter('depth', 100).get_parameter_value().integer_value
         self.qos_reliability = self.declare_parameter('reliability', 'reliable').get_parameter_value().string_value
 
     def _validate_parameters(self):
-        if self.publish_rate_hz <= 0:
-            self.get_logger().warn(
-                f"Invalid publish_rate_hz={self.publish_rate_hz}, fallback to 100Hz"
-            )
-            self.publish_rate_hz = 100
-
         if self.qos_depth <= 0:
             self.get_logger().warn(
                 f"Invalid depth={self.qos_depth}, fallback to 100"
@@ -112,14 +96,11 @@ class EbimuPublisher(Node):
             self.qos_reliability = 'reliable'
 
     def _create_qos_profile(self):
-        qos = QoSProfile(depth=self.qos_depth)
-        qos.history = HistoryPolicy.KEEP_LAST
-
-        if self.qos_reliability == 'best_effort':
-            qos.reliability = ReliabilityPolicy.BEST_EFFORT
-        else:
-            qos.reliability = ReliabilityPolicy.RELIABLE
-
+        qos = QoSProfile(
+            depth=self.qos_depth,
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST
+        )
         return qos
 
     def _connect_ebimu(self):
@@ -130,7 +111,7 @@ class EbimuPublisher(Node):
             self.get_logger().error(f"EBIMU connection failed: {e}")
             raise
 
-    def timer_callback(self):
+    def publish_once(self):
         try:
             data = self.driver.read()
         except serial.SerialException as e:
@@ -158,14 +139,14 @@ class EbimuPublisher(Node):
     def _print_startup_info(self):
         self.get_logger().info(
             f"EBIMU publisher started\n"
-            f"  Port          : {self.port}\n"
-            f"  Baud          : {self.baud}\n"
-            f"  IMU topic     : {self.topic_name}\n"
-            f"  Gravity topic : {self.gravity_topic_name}\n"
-            f"  Frame ID      : {self.frame_id}\n"
-            f"  Rate          : {self.publish_rate_hz} Hz\n"
-            f"  Zero start    : {self.zero_orientation_on_start}\n"
-            f"  QoS depth     : {self.qos_depth}\n"
+            f"  Port           : {self.port}\n"
+            f"  Baud           : {self.baud}\n"
+            f"  IMU topic      : {self.topic_name}\n"
+            f"  Gravity topic  : {self.gravity_topic_name}\n"
+            f"  Frame ID       : {self.frame_id}\n"
+            f"  Publish mode   : on serial read\n"
+            f"  Zero start     : {self.zero_orientation_on_start}\n"
+            f"  QoS depth      : {self.qos_depth}\n"
             f"  QoS reliability: {self.qos_reliability}"
         )
 
@@ -183,7 +164,9 @@ def main(args=None):
     node = EbimuPublisher()
 
     try:
-        rclpy.spin(node)
+        while rclpy.ok():
+            rclpy.spin_once(node, timeout_sec=0.0)
+            node.publish_once()
     except KeyboardInterrupt:
         pass
     finally:

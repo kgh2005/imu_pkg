@@ -5,7 +5,7 @@ ebimu_publisher:
     baud: 115200
 
     # Topic / frame
-    topic_name: "/imu/data_raw"
+    topic_name: "/imu/data"
     gravity_topic_name: "/imu/gravity"
     frame_id: "imu_link"
 
@@ -27,7 +27,7 @@ ebimu_publisher:
 imu_ui_node:
   ros__parameters:
     # Topic / frame
-    input_topic: "/imu/data_raw"
+    input_topic: "/imu/data"
     output_topic: "/imu/data_zeroed"
     frame_id: "imu_link"
 
