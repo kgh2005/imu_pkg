@@ -63,7 +63,7 @@ class EbimuPublisher(Node):
         self.baud = self.declare_parameter('baud', 115200).get_parameter_value().integer_value
 
         # Topic / frame
-        self.topic_name = self.declare_parameter('topic_name', '/imu/data_raw').get_parameter_value().string_value
+        self.topic_name = self.declare_parameter('topic_name', '/imu/data').get_parameter_value().string_value
         self.gravity_topic_name = self.declare_parameter('gravity_topic_name', '/imu/gravity').get_parameter_value().string_value
         self.frame_id = self.declare_parameter('frame_id', 'imu_link').get_parameter_value().string_value
 
@@ -96,14 +96,11 @@ class EbimuPublisher(Node):
             self.qos_reliability = 'reliable'
 
     def _create_qos_profile(self):
-        qos = QoSProfile(depth=self.qos_depth)
-        qos.history = HistoryPolicy.KEEP_LAST
-
-        if self.qos_reliability == 'best_effort':
-            qos.reliability = ReliabilityPolicy.BEST_EFFORT
-        else:
-            qos.reliability = ReliabilityPolicy.RELIABLE
-
+        qos = QoSProfile(
+            depth=self.qos_depth,
+            reliability=ReliabilityPolicy.RELIABLE,
+            history=HistoryPolicy.KEEP_LAST
+        )
         return qos
 
     def _connect_ebimu(self):
