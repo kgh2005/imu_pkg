@@ -1,7 +1,7 @@
 ebimu_publisher:
   ros__parameters:
     # Serial
-    port: "/dev/ttyUSB0"
+    port: "/dev/ttyUSB-EBIMU"
     baud: 115200
 
     # Topic / frame

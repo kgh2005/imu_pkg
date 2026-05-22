@@ -12,6 +12,12 @@ from geometry_msgs.msg import Vector3Stamped
 from imu_pkg.drivers.ebimu_driver import EbimuDriver
 from imu_pkg.converters.imu_converter import ImuConverter
 
+from geometry_msgs.msg import TransformStamped
+from tf2_ros import TransformBroadcaster
+
+from visualization_msgs.msg import Marker
+from geometry_msgs.msg import Point
+
 
 class EbimuPublisher(Node):
     def __init__(self):
@@ -33,7 +39,17 @@ class EbimuPublisher(Node):
         # =========================
         self.imu_pub = self.create_publisher(Imu, self.topic_name, qos)
         self.gravity_pub = self.create_publisher(Vector3Stamped, self.gravity_topic_name, qos)
+        self.tf_broadcaster = TransformBroadcaster(self)
+        self.gravity_marker_topic_name = self.declare_parameter(
+            'gravity_marker_topic_name',
+            '/imu/gravity_marker'
+        ).get_parameter_value().string_value
 
+        self.gravity_marker_pub = self.create_publisher(
+            Marker,
+            self.gravity_marker_topic_name,
+            qos
+        )
         # =========================
         # Driver / Converter
         # =========================
@@ -59,7 +75,7 @@ class EbimuPublisher(Node):
 
     def _declare_parameters(self):
         # Serial
-        self.port = self.declare_parameter('port', '/dev/ttyUSB0').get_parameter_value().string_value
+        self.port = self.declare_parameter('port', '/dev/ttyUSB-EBIMU').get_parameter_value().string_value
         self.baud = self.declare_parameter('baud', 115200).get_parameter_value().integer_value
 
         # Topic / frame
@@ -81,6 +97,11 @@ class EbimuPublisher(Node):
         # QoS
         self.qos_depth = self.declare_parameter('depth', 100).get_parameter_value().integer_value
         self.qos_reliability = self.declare_parameter('reliability', 'reliable').get_parameter_value().string_value
+
+        self.fixed_frame_id = self.declare_parameter(
+            'fixed_frame_id',
+            'world'
+        ).get_parameter_value().string_value
 
     def _validate_parameters(self):
         if self.qos_depth <= 0:
@@ -132,9 +153,70 @@ class EbimuPublisher(Node):
             data=data,
             stamp=stamp
         )
+        gravity_marker = self.make_gravity_marker(gravity_msg)
 
         self.imu_pub.publish(imu_msg)
         self.gravity_pub.publish(gravity_msg)
+        self.publish_orientation_tf(imu_msg)
+        self.gravity_marker_pub.publish(gravity_marker)
+
+    def make_gravity_marker(self, gravity_msg):
+        marker = Marker()
+
+        marker.header.stamp = gravity_msg.header.stamp
+        marker.header.frame_id = gravity_msg.header.frame_id
+
+        marker.ns = "gravity_vector"
+        marker.id = 0
+        marker.type = Marker.ARROW
+        marker.action = Marker.ADD
+
+        # 시작점: IMU frame 원점
+        start = Point()
+        start.x = 0.0
+        start.y = 0.0
+        start.z = 0.0
+
+        # 끝점: 중력 방향
+        scale = 1.0
+
+        end = Point()
+        end.x = gravity_msg.vector.x * scale
+        end.y = gravity_msg.vector.y * scale
+        end.z = gravity_msg.vector.z * scale
+
+        marker.points = [start, end]
+
+        # 화살표 크기
+        marker.scale.x = 0.03   # shaft diameter
+        marker.scale.y = 0.08   # head diameter
+        marker.scale.z = 0.12   # head length
+
+        # 색상: 노란색 계열
+        marker.color.r = 1.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
+        marker.color.a = 1.0
+
+        marker.lifetime.sec = 0
+        marker.lifetime.nanosec = 0
+
+        return marker
+
+    def publish_orientation_tf(self, imu_msg):
+        tf_msg = TransformStamped()
+
+        tf_msg.header.stamp = imu_msg.header.stamp
+        tf_msg.header.frame_id = self.fixed_frame_id
+        tf_msg.child_frame_id = self.frame_id
+
+        tf_msg.transform.translation.x = 0.0
+        tf_msg.transform.translation.y = 0.0
+        tf_msg.transform.translation.z = 0.0
+
+        tf_msg.transform.rotation = imu_msg.orientation
+
+        self.tf_broadcaster.sendTransform(tf_msg)
 
     def _print_startup_info(self):
         self.get_logger().info(
